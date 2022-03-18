@@ -60,12 +60,11 @@ function evalBQN(from, to, pretty)
     for line, lnum in enumerate(output:gmatch("[^\n]+")) do
         if lnum == 1 then
           local message = line:gsub("^Error: (.*)", "%1")
-          message = string.gsub(message,"\n"," ")
           if message ~= line then
             error = {message=message}
           end
         end
-        if error ~= nil and lnum == 2 then
+        if error ~= nil and lnum == 3 then
           local lnum = line:gsub("^%(%-p%):(%d+):", "%1")
           error.lnum = tonumber(lnum) + from - 1
         end
