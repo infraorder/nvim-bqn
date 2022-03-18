@@ -14,6 +14,22 @@ function clearBQN(from, to)
   vim.api.nvim_command("redraw!")
 end
 
+function executeCommand(command)
+    local tmpfile = os.tmpname()
+    local exit = os.execute(command .. ' > ' .. tmpfile .. ' 2> ' .. tmpfile .. '.err')
+
+    local stdout_file = io.open(tmpfile, "r")
+    local stdout = stdout_file:read("*all")
+
+    local stderr_file = io.open(tmpfile .. '.err', "r")
+    local stderr = stderr_file:read("*all")
+
+    stdout_file:close()
+    stderr_file:close()
+
+    return exit, stdout, stderr
+end
+
 function evalBQN(from, to, pretty)
     if to < 0 then
       to = vim.api.nvim_buf_line_count(0) + to + 1
@@ -52,24 +68,22 @@ function evalBQN(from, to, pretty)
         bqn = "BQN"
     end
     local cmd = bqn .. " -" .. flag .. " \"" .. program .. "\""
-    local executable = assert(io.popen(cmd))
-    local output = executable:read('*all')
+    local exit, stdout, stderr = executeCommand(cmd)
 
     local error = nil
+    local output = nil
+    local hl = 'bqnoutok'
+    if exit ~= 0 then
+      local message = stderr:match("^Error: (.-)\n")
+      hl = 'bqnouterr'
+      error = {message=message, lnum=tonumber(stderr:match(":(%d+):")) + from - 1}
+      output = stderr
+    else 
+      output = stdout
+    end
+
     local lines = {}
-    for line, lnum in enumerate(output:gmatch("[^\n]+")) do
-        if lnum == 1 then
-          local message = line:gsub("^Error: (.*)", "%1")
-          if message ~= line then
-            error = {message=message}
-          end
-        end
-        if error ~= nil and lnum == 2 then
-          local lnum = line:gsub("^%a:(%d+):", "%1")
-          error.lnum = tonumber(lnum) + from - 1
-        end
-        local hl = 'bqnoutok'
-        if error ~= nil then hl = 'bqnouterr' end
+    for line, lnum in enumerate(output:gmatch("[^\r\n]+")) do
         table.insert(lines, {{' ' .. line, hl}})
     end
     table.insert(lines, {{' ', 'bqnoutok'}})
