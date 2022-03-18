@@ -64,8 +64,8 @@ function evalBQN(from, to, pretty)
             error = {message=message}
           end
         end
-        if error ~= nil and lnum == 3 then
-          local lnum = line:gsub("^%(%-p%):(%d+):", "%1")
+        if error ~= nil and lnum == 2 then
+          local lnum = line:gsub("^%a:(%d+):", "%1")
           error.lnum = tonumber(lnum) + from - 1
         end
         local hl = 'bqnoutok'
