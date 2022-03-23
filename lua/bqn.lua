@@ -1,20 +1,9 @@
 local ns = vim.api.nvim_create_namespace('bqnout')
 
-local function enumerate(it)
-  local idx, v = 0, nil
-  return function()
-    v, idx = it(), idx + 1
-    return v, idx
-  end
-end
+vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"},  {
+  command=[[lua if vim.bo.filetype == "bqn" then require("bqn").eval() end]] })
 
-function clearBQN(from, to)
-  vim.diagnostic.reset(ns, 0)
-  vim.api.nvim_buf_clear_namespace(0, ns, from, to)
-  vim.api.nvim_command("redraw!")
-end
-
-function executeCommand(command)
+function execute_command(command)
     local tmpfile = os.tmpname()
     local exit = os.execute(command .. ' > ' .. tmpfile .. ' 2> ' .. tmpfile .. '.err')
 
@@ -30,105 +19,100 @@ function executeCommand(command)
     return exit, stdout, stderr
 end
 
-function evalBQN(from, to, pretty)
-    if to < 0 then
-      to = vim.api.nvim_buf_line_count(0) + to + 1
-    end
-    -- Compute `to` position by looking back till we find first non-empty line.
-    while to > 0 do
-      local line = vim.api.nvim_buf_get_lines(0, to - 1, to, true)[1]
-      if #line ~= 0 and line:find("^%s*#") == nil then break end
-      to = to - 1
-    end
+function is_balanced(s)
+  --Lua pattern matching has a 'balanced' pattern that matches sets of balanced characters.
+  --Any two characters can be used.
+  return s:gsub('%b{}','')=='' and true or false
+end
 
-    if from > to then
-      from = to
-    end
+function clear(start, stop)
+  vim.diagnostic.reset(ns, 0)
+  vim.api.nvim_buf_clear_namespace(0, ns, start, stop)
+  vim.api.nvim_command("redraw!")
+end
 
-    to = math.max(to, 1)
-    from = math.max(from, 0)
+function eval(start, stop)
+  local start = start
+  local stop = stop
 
-    local code = vim.api.nvim_buf_get_lines(0, from, to, true)
-    local program = ""
-    for k, v in ipairs(code) do
-        program = program .. v .. "\n"
-    end
+  if start == nil then
+    start = 0
+  end
+  if stop == nil then
+    stop = vim.api.nvim_buf_line_count(0)
+  end
 
-    -- Escape input for shell
-    program = string.gsub(program, '"', '\\"')
-    program = string.gsub(program, '`', '\\`')
+  local program = table.concat(
+    vim.api.nvim_buf_get_lines(0, start, stop, true), 
+    "\n")
+  
+  -- while is_balanced(program) ~= true do
+  --   program = program .. table.concat(
+  --     vim.api.nvim_buf_get_lines(0, stop, stop + 1, true), 
+  --     "\n")
+  --   print(program)
+  --   stop = stop + 1
+  -- end
 
-    local flag = "e"
-    if pretty then
-        flag = "p"
-    end
+  -- Escape input for shell
+  program = string.gsub(program, '"', '\\"')
+  program = string.gsub(program, '`', '\\`')
 
-    local found, bqn = pcall(vim.api.nvim_get_var, "nvim_bqn")
-    if not found then
-        bqn = "BQN"
-    end
-    local cmd = bqn .. " -" .. flag .. " \"" .. program .. "\""
-    local exit, stdout, stderr = executeCommand(cmd)
+  print(is_balanced(program))
 
-    local error = nil
-    local output = nil
-    local hl = 'bqnoutok'
-    if exit ~= 0 then
-      local message = stderr:match("^Error: (.-)\n")
-      hl = 'bqnouterr'
-      error = {message=message, lnum=tonumber(stderr:match(":(%d+):")) + from - 1}
-      output = stderr
-    else 
-      output = stdout
-    end
+  local cmd = 'BQN -p "' .. program .. '"'
+  local exit, stdout, stderr = execute_command(cmd)
 
-    local lines = {}
-    for line, lnum in enumerate(output:gmatch("[^\r\n]+")) do
-        table.insert(lines, {{' ' .. line, hl}})
-    end
-    table.insert(lines, {{' ', 'bqnoutok'}})
-
-    -- Reset and show diagnostics
-    vim.diagnostic.reset(ns, 0)
-    if error ~= nil and error.lnum ~= nil then
-      vim.diagnostic.set(ns, 0, {{
-        message=error.message,
-        lnum=error.lnum,
-        col=0,
-        severity=vim.diagnostic.severity.ERROR,
-        source='BQN',
-      }})
+  local error = nil
+  local output = nil
+  local hl = 'bqnoutok'
+  if exit ~= 0 then
+    local message = stderr:match("^Error: (.-)\n")
+    hl = 'bqnouterr'
+    local line_number = tonumber(stderr:match(":(%d+):"))
+    if (line_number == nil) then
+      line_number = 0
     end
 
-    -- Compute `cto` (clear to) position by looking forward from `to` till we
-    -- find first non-empty line. We do this so we clear all "orphaned" virtual
-    -- line blocks (which correspond to already deleted lines).
-    local total_lines = vim.api.nvim_buf_line_count(0)
-    local cto = to
-    while cto < total_lines do
-      local line = vim.api.nvim_buf_get_lines(0, cto, cto + 1, true)[1]
-      if #line ~= 0 and line:find("^%s*#") == nil then break end
-      cto = cto + 1
-    end
+    error = {message=message, lnum=line_number + start - 1}
+    output = stderr
+  else
+    output = stdout
+  end
 
-    vim.api.nvim_buf_clear_namespace(0, ns, to - 1, cto)
-    vim.api.nvim_buf_set_extmark(0, ns, to - 1, 0, {
-      end_line = to - 1,
-      virt_lines=lines
-    })
+  local lines = {}
+  for line in output:gmatch("[^\r\n]+") do
+      table.insert(lines, {{' ' .. line, hl}})
+  end
 
-    local botline = vim.fn.line("w$")
-    if to + #lines > botline then
-      local cur_line = vim.fn.getpos('.')[2]
-      if cur_line == to then
-        vim.api.nvim_command('normal zz')
-      end
-    end
+  -- Reset and show diagnostics
+  vim.diagnostic.reset(ns, 0)
+  if error ~= nil and error.lnum ~= nil then
+    vim.diagnostic.set(ns, 0, {{
+      message=error.message,
+      lnum=error.lnum,
+      col=0,
+      severity=vim.diagnostic.severity.ERROR,
+      source='BQN',
+    }})
+  end
 
-    vim.api.nvim_command("redraw!")
+  local cto = stop
+  while cto < vim.api.nvim_buf_line_count(0) do
+    local line = vim.api.nvim_buf_get_lines(0, cto, cto + 1, true)[1]
+    if #line ~= 0 and line:find("^%s*#") == nil then break end
+    cto = cto + 1
+  end
+
+  vim.api.nvim_buf_clear_namespace(0, ns, stop - 1, cto)
+  vim.api.nvim_buf_set_extmark(0, ns, stop -1, 0, {
+    virt_lines=lines
+  })
+
+  vim.api.nvim_command("redraw!")
 end
 
 return {
-    evalBQN = evalBQN,
-    clearBQN = clearBQN,
+    eval = eval,
+    clear = clear,
 }
