@@ -44,33 +44,34 @@ util.between = function(start, stop, line)
   return (start >= line.start and stop <= line.stop + 1)
 end
 
-util.parse = function(data)
-  local head = table.remove(data, 1)
-  head = head:match("(.*)#") or head
+util.trim = function(s)
+  return (string.gsub(s, "^%s*(.-)%s*$", "%1"))
+end
 
+util.parse = function(data)
   local i = 0;
+  local index = 0;
+
   return table.reduce(data, function(acc, line, k)
-    i = i + 1
-    if (util.is_empty(acc[#acc].data) or is_balanced(acc[#acc].data)) then
-      if (not util.is_empty(line) and not util.is_empty(line:match("(.*)#") or line)) then
+    if (not util.is_empty(util.trim(line:gsub("#(.*)", "") or line))) then
+      if (acc[#acc] == nil 
+          or util.is_empty(acc[#acc].data) 
+          or is_balanced(acc[#acc].data)) then
         table.insert(acc, {
-          index = acc[#acc].index + 1,
+          index = index,
           start = i,
           stop = i,
           data = line:match("(.*)#") or line
         })
+        index = index + 1
+      else
+        acc[#acc].stop = i
+        acc[#acc].data = acc[#acc].data .. '\n' .. (line:match("(.*)#") or line)
       end
-    else
-      acc[#acc].stop = i
-      acc[#acc].data = acc[#acc].data .. '\n' .. (line:match("(.*)#") or line)
     end
+    i = i + 1
     return acc
-  end, {{
-    index = 0,
-    start = i,
-    stop = i,
-    data = head
-  }})
+  end, {})
 end
 
 return util

@@ -12,7 +12,7 @@ endfunction
 
 function! BQNConstantEval() range
   return luaeval(
-          \ 'vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"},  {command=[[lua if vim.bo.filetype == "bqn" then require("bqn").repl.eval() end]] })')
+          \ 'require("bqn").repl.constant_eval()')
 endfunction
 
 function! BQNClearAfterLine()
@@ -38,7 +38,7 @@ hi link bqnouterr Error
 
 command! BQNEvalLine call BQNEvalLine()
 command! -range BQNEvalRange <line1>,<line2>call BQNEvalRange()
-command! BQNEvalFile :lua require("bqn").repl.eval(0, -1, true)
+command! BQNEvalFile :lua require("bqn").repl.eval(0, -1)
 
 command! BQNClearAfterLine call BQNClearAfterLine()
 command! BQNConstantEval call BQNConstantEval()

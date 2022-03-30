@@ -32,7 +32,15 @@ M.buffers = {}
 
 M.store = {
   connect_timeout = 1000,
+  constant = false;
 }
+
+M.constant_eval = function()
+  if (M.store.constant == false) then
+    M.store.constant = true;
+    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"},  {command=[[lua if vim.bo.filetype == "bqn" then require("bqn").repl.eval() end]] })
+  end
+end
 
 M.start_repl = function()
   local buffer_name = util.get_buffer_name()
@@ -211,7 +219,7 @@ M.eval = function(start, stop)
   local redundant_eval = false
   local empty_range = false
 
-  if start ~= nil or start ~= nil then
+  if start ~= nil or start ~= nil or stop == -1 then
     redundant_eval = true
   else
     empty_range = true
@@ -221,7 +229,7 @@ M.eval = function(start, stop)
     start = 0
   end
 
-  if stop == nil then
+  if stop == nil or stop == -1 then
     stop = vim.api.nvim_buf_line_count(0)
   end
 
@@ -239,7 +247,14 @@ M.eval = function(start, stop)
   M.buffers[buffer_name].pending = table.reduce(
     util.parse(vim.api.nvim_buf_get_lines(0, 0, vim.api.nvim_buf_line_count(0), true)),
     function(acc, pending, k)
-      if ((redundant_eval or M.buffers[buffer_name].line_cache[k] == nil or M.buffers[buffer_name].line_cache[k].data ~= pending.data) and (empty_range or util.between(start, stop, pending))) then
+      if ((redundant_eval 
+          or M.buffers[buffer_name].line_cache[k] == nil 
+          or M.buffers[buffer_name].line_cache[k].data ~= pending.data)
+          and (empty_range or util.between(start, stop, pending))) then
+
+        -- This is to eval every line after file change
+        redundant_eval = true
+
         M.buffers[buffer_name].line_cache[k] = pending
         table.insert(acc, pending)
       end
