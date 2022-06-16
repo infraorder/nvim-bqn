@@ -219,7 +219,8 @@ M.eval = function(start, stop)
   local redundant_eval = false
   local empty_range = false
 
-  if start ~= nil or start ~= nil or stop == -1 then
+  if (start ~= nil or start ~= nil or stop == -1) 
+      or start + 1 == stop then
     redundant_eval = true
   else
     empty_range = true
@@ -248,6 +249,7 @@ M.eval = function(start, stop)
     util.parse(vim.api.nvim_buf_get_lines(0, 0, vim.api.nvim_buf_line_count(0), true)),
     function(acc, pending, k)
       if ((redundant_eval 
+          or start + 1 == stop
           or M.buffers[buffer_name].line_cache[k] == nil 
           or M.buffers[buffer_name].line_cache[k].data ~= pending.data)
           and (empty_range or util.between(start, stop, pending))) then
