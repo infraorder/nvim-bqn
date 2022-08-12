@@ -53,7 +53,7 @@ util.parse = function(data)
   local index = 0;
 
   return table.reduce(data, function(acc, line, k)
-    if (not util.is_empty(util.trim(line:gsub("#(.*)", "") or line))) then
+    if (not util.is_empty(util.trim(line:gsub("%s*%#[^\n\r]*", "") or line))) then
       if (acc[#acc] == nil 
           or util.is_empty(acc[#acc].data) 
           or is_balanced(acc[#acc].data)) then
@@ -61,12 +61,12 @@ util.parse = function(data)
           index = index,
           start = i,
           stop = i,
-          data = line:match("(.*)#") or line
+          data = line:match("%s*%#[^\n\r]*") or line
         })
         index = index + 1
       else
         acc[#acc].stop = i
-        acc[#acc].data = acc[#acc].data .. '\n' .. (line:match("(.*)#") or line)
+        acc[#acc].data = acc[#acc].data .. '\n' .. (line:match("%s*%#[^\n\r]*") or line)
       end
     end
     i = i + 1
